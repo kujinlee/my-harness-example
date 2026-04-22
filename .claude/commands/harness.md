@@ -1,38 +1,49 @@
-이 프로젝트는 Harness 프레임워크를 사용한다. 아래 워크플로우에 따라 작업을 진행하라.
+This project uses the Harness framework. Follow the workflow below when working.
 
 ---
 
-## 워크플로우
+## Before implementation
 
-### A. 탐색
+If `docs/PRD.md`, `ARCHITECTURE.md`, `ADR.md`, or `UI_GUIDE.md` (or `CLAUDE.md`) still use **template placeholders** (`{...}`), run **discovery** first so implementation phases have real guardrails:
 
-`/docs/` 하위 문서(PRD, ARCHITECTURE, ADR 등)를 읽고 프로젝트의 기획·아키텍처·설계 의도를 파악한다. 필요시 Explore 에이전트를 병렬로 사용한다.
+- **Chat-led:** follow `.claude/commands/discover.md` and `docs/DISCOVERY.md`.
+- **Harness-led:** copy `templates/discovery/0-discovery` → `phases/0-discovery`, edit `index.json`, add the phase to `phases/index.json` if used, then `python3 scripts/execute.py 0-discovery` (see `templates/discovery/README.md`).
 
-### B. 논의
+Discovery content is **self-contained** (patterns adapted from oh-my-claudecode; OMC does not need to be installed).
 
-구현을 위해 구체화하거나 기술적으로 결정해야 할 사항이 있으면 사용자에게 제시하고 논의한다.
+---
 
-### C. Step 설계
+## Workflow
 
-사용자가 구현 계획 작성을 지시하면 여러 step으로 나뉜 초안을 작성해 피드백을 요청한다.
+### A. Explore
 
-설계 원칙:
+Read documentation under `/docs/` (PRD, ARCHITECTURE, ADR, etc.) to understand the project’s product intent, architecture, and design goals. Use Explore agents in parallel when helpful.
 
-1. **Scope 최소화** — 하나의 step에서 하나의 레이어 또는 모듈만 다룬다. 여러 모듈을 동시에 수정해야 하면 step을 쪼갠다.
-2. **자기완결성** — 각 step 파일은 독립된 Claude 세션에서 실행된다. "이전 대화에서 논의한 바와 같이" 같은 외부 참조는 금지한다. 필요한 정보는 전부 파일 안에 적는다.
-3. **사전 준비 강제** — 관련 문서 경로와 이전 step에서 생성/수정된 파일 경로를 명시한다. 세션이 코드를 읽고 맥락을 파악한 뒤 작업하도록 유도한다.
-4. **시그니처 수준 지시** — 함수/클래스의 인터페이스만 제시하고 내부 구현은 에이전트 재량에 맡긴다. 단, 설계 의도에서 벗어나면 안 되는 핵심 규칙(멱등성, 보안, 데이터 무결성 등)은 반드시 명시한다.
-5. **AC는 실행 가능한 커맨드** — "~가 동작해야 한다" 같은 추상적 서술이 아닌 `npm run build && npm test` 같은 실제 실행 가능한 검증 커맨드를 포함한다.
-6. **주의사항은 구체적으로** — "조심해라" 대신 "X를 하지 마라. 이유: Y" 형식으로 적는다.
-7. **네이밍** — step name은 kebab-case slug로, 해당 step의 핵심 모듈/작업을 한두 단어로 표현한다 (예: `project-setup`, `api-layer`, `auth-flow`).
+### B. Discuss
 
-### D. 파일 생성
+When something must be clarified or decided technically before implementation, surface it to the user and discuss.
 
-사용자가 승인하면 아래 파일들을 생성한다.
+### C. Step design
 
-#### D-1. `phases/index.json` (전체 현황)
+When the user asks for an implementation plan, produce a draft split into multiple steps and ask for feedback.
 
-여러 task를 관리하는 top-level 인덱스. 이미 존재하면 `phases` 배열에 새 항목을 추가한다.
+Design principles:
+
+1. **Minimize scope** — Each step covers one layer or module only. If several modules must change at once, split the steps.
+2. **Self-contained** — Each step file runs in an independent Claude session. Do not use external references like “as discussed in the previous conversation.” Put everything needed inside the file.
+3. **Force upfront prep** — List relevant document paths and paths of files created or modified in prior steps. Encourage the session to read code and build context before acting.
+4. **Signature-level direction** — Specify function/class interfaces only; leave internals to the agent. Still spell out non-negotiable rules from the design intent (idempotency, security, data integrity, etc.).
+5. **ACs are runnable commands** — Avoid vague statements like “X should work.” Include real verification commands such as `npm run build && npm test`.
+6. **Warnings must be concrete** — Instead of “be careful,” write “Do not do X. Reason: Y.”
+7. **Naming** — Step names are kebab-case slugs expressing the core module or work in one or two words (e.g. `project-setup`, `api-layer`, `auth-flow`).
+
+### D. File creation
+
+After the user approves, create the following files.
+
+#### D-1. `phases/index.json` (overall status)
+
+Top-level index for managing multiple tasks. If it already exists, append a new entry to the `phases` array.
 
 ```json
 {
@@ -45,15 +56,15 @@
 }
 ```
 
-- `dir`: task 디렉토리명.
-- `status`: `"pending"` | `"completed"` | `"error"` | `"blocked"`. execute.py가 실행 중 자동으로 업데이트한다.
-- 타임스탬프(`completed_at`, `failed_at`, `blocked_at`)는 execute.py가 상태 변경 시 자동 기록한다. 생성 시 넣지 않는다.
+- `dir`: Task directory name.
+- `status`: `"pending"` | `"completed"` | `"error"` | `"blocked"`. `execute.py` updates this automatically while running.
+- Timestamps (`completed_at`, `failed_at`, `blocked_at`) are recorded automatically by `execute.py` on status changes. Do not set them when creating the file.
 
-#### D-2. `phases/{task-name}/index.json` (task 상세)
+#### D-2. `phases/{task-name}/index.json` (task detail)
 
 ```json
 {
-  "project": "<프로젝트명>",
+  "project": "<project-name>",
   "phase": "<task-name>",
   "steps": [
     { "step": 0, "name": "project-setup", "status": "pending" },
@@ -63,89 +74,89 @@
 }
 ```
 
-필드 규칙:
+Field rules:
 
-- `project`: 프로젝트명 (CLAUDE.md 참조).
-- `phase`: task 이름. 디렉토리명과 일치시킨다.
-- `steps[].step`: 0부터 시작하는 순번.
+- `project`: Project name (see CLAUDE.md).
+- `phase`: Task name. Must match the directory name.
+- `steps[].step`: Zero-based sequence number.
 - `steps[].name`: kebab-case slug.
-- `steps[].status`: 초기값은 모두 `"pending"`.
+- `steps[].status`: Initial value is always `"pending"`.
 
-상태 전이와 자동 기록 필드:
+Status transitions and auto-recorded fields:
 
-| 전이 | 기록되는 필드 | 기록 주체 |
+| Transition | Fields recorded | Recorded by |
 |------|-------------|----------|
-| → `completed` | `completed_at`, `summary` | Claude 세션 (summary), execute.py (timestamp) |
-| → `error` | `failed_at`, `error_message` | Claude 세션 (message), execute.py (timestamp) |
-| → `blocked` | `blocked_at`, `blocked_reason` | Claude 세션 (reason), execute.py (timestamp) |
+| → `completed` | `completed_at`, `summary` | Claude session (summary), execute.py (timestamp) |
+| → `error` | `failed_at`, `error_message` | Claude session (message), execute.py (timestamp) |
+| → `blocked` | `blocked_at`, `blocked_reason` | Claude session (reason), execute.py (timestamp) |
 
-`summary`는 step 완료 시 산출물을 한 줄로 요약한 것으로, execute.py가 다음 step 프롬프트에 컨텍스트로 누적 전달한다. 따라서 다음 step에 유용한 정보(생성된 파일, 핵심 결정 등)를 담아야 한다.
+`summary` is a one-line description of the step’s output when it completes; `execute.py` accumulates it as context for the next step’s prompt. Include information useful for the next step (created files, key decisions, etc.).
 
-`created_at`은 execute.py가 최초 실행 시 task 레벨에 한 번만 기록한다. step 레벨의 `started_at`도 execute.py가 각 step 시작 시 자동 기록한다. 생성 시 넣지 않는다.
+`created_at` is written once at task level by `execute.py` on first run. Step-level `started_at` is also written automatically by `execute.py` when each step starts. Do not set these when creating the file.
 
-#### D-3. `phases/{task-name}/step{N}.md` (각 step마다 1개)
+#### D-3. `phases/{task-name}/step{N}.md` (one per step)
 
 ```markdown
-# Step {N}: {이름}
+# Step {N}: {name}
 
-## 읽어야 할 파일
+## Files to read
 
-먼저 아래 파일들을 읽고 프로젝트의 아키텍처와 설계 의도를 파악하라:
+Read the following first to understand the project’s architecture and design intent:
 
 - `/docs/ARCHITECTURE.md`
 - `/docs/ADR.md`
-- {이전 step에서 생성/수정된 파일 경로}
+- {paths of files created or modified in previous steps}
 
-이전 step에서 만들어진 코드를 꼼꼼히 읽고, 설계 의도를 이해한 뒤 작업하라.
+Read code from prior steps carefully and understand the design intent before working.
 
-## 작업
+## Work
 
-{구체적인 구현 지시. 파일 경로, 클래스/함수 시그니처, 로직 설명을 포함.
-코드 스니펫은 인터페이스/시그니처 수준만 제시하고, 구현체는 에이전트에게 맡겨라.
-단, 설계 의도에서 벗어나면 안 되는 핵심 규칙은 명확히 박아넣어라.}
+{Concrete implementation instructions: file paths, class/function signatures, logic description.
+Keep code snippets at interface/signature level only; leave implementations to the agent.
+Still spell out non-negotiable rules that must not diverge from the design intent.}
 
 ## Acceptance Criteria
 
 ```bash
-npm run build   # 컴파일 에러 없음
-npm test        # 테스트 통과
+npm run build   # no compile errors
+npm test        # tests pass
 ```
 
-## 검증 절차
+## Verification procedure
 
-1. 위 AC 커맨드를 실행한다.
-2. 아키텍처 체크리스트를 확인한다:
-   - ARCHITECTURE.md 디렉토리 구조를 따르는가?
-   - ADR 기술 스택을 벗어나지 않았는가?
-   - CLAUDE.md CRITICAL 규칙을 위반하지 않았는가?
-3. 결과에 따라 `phases/{task-name}/index.json`의 해당 step을 업데이트한다:
-   - 성공 → `"status": "completed"`, `"summary": "산출물 한 줄 요약"`
-   - 수정 3회 시도 후에도 실패 → `"status": "error"`, `"error_message": "구체적 에러 내용"`
-   - 사용자 개입 필요 (API 키, 외부 인증, 수동 설정 등) → `"status": "blocked"`, `"blocked_reason": "구체적 사유"` 후 즉시 중단
+1. Run the AC commands above.
+2. Check the architecture checklist:
+   - Does the layout follow ARCHITECTURE.md?
+   - Does the stack stay within ADR?
+   - Are there any CLAUDE.md CRITICAL rule violations?
+3. Update the corresponding step in `phases/{task-name}/index.json` based on the outcome:
+   - Success → `"status": "completed"`, `"summary": "one-line summary of output"`
+   - Still failing after three fix attempts → `"status": "error"`, `"error_message": "specific error details"`
+   - User intervention required (API keys, external auth, manual setup, etc.) → `"status": "blocked"`, `"blocked_reason": "specific reason"` then stop immediately
 
-## 금지사항
+## Do not
 
-- {이 step에서 하지 말아야 할 것. "X를 하지 마라. 이유: Y" 형식}
-- 기존 테스트를 깨뜨리지 마라
+- {What this step must not do. Use “Do not do X. Reason: Y.”}
+- Do not break existing tests
 ```
 
-### E. 실행
+### E. Execution
 
 ```bash
-python3 scripts/execute.py {task-name}        # 순차 실행
-python3 scripts/execute.py {task-name} --push  # 실행 후 push
+python3 scripts/execute.py {task-name}        # run sequentially
+python3 scripts/execute.py {task-name} --push  # run then push
 ```
 
-execute.py가 자동으로 처리하는 것:
+What `execute.py` handles automatically:
 
-- `feat-{task-name}` 브랜치 생성/checkout
-- 가드레일 주입 — CLAUDE.md + docs/*.md 내용을 매 step 프롬프트에 포함
-- 컨텍스트 누적 — 완료된 step의 summary를 다음 step 프롬프트에 전달
-- 자가 교정 — 실패 시 최대 3회 재시도하며, 이전 에러 메시지를 프롬프트에 피드백
-- 2단계 커밋 — 코드 변경(`feat`)과 메타데이터(`chore`)를 분리 커밋
-- 타임스탬프 — started_at, completed_at, failed_at, blocked_at 자동 기록
+- Create/checkout `feat-{task-name}` branch
+- Guardrail injection — include CLAUDE.md + docs/*.md in every step’s prompt
+- Context accumulation — pass completed step summaries into the next step’s prompt
+- Self-correction — on failure, up to three retries with prior error messages fed back into the prompt
+- Two-phase commits — separate commits for code changes (`feat`) and metadata (`chore`)
+- Timestamps — automatic `started_at`, `completed_at`, `failed_at`, `blocked_at`
 
-에러 복구:
+Error recovery:
 
-- **error 발생 시**: `phases/{task-name}/index.json`에서 해당 step의 `status`를 `"pending"`으로 바꾸고 `error_message`를 삭제한 뒤 재실행한다.
-- **blocked 발생 시**: `blocked_reason`에 적힌 사유를 해결한 뒤, `status`를 `"pending"`으로 바꾸고 `blocked_reason`을 삭제한 뒤 재실행한다.
+- **On error**: In `phases/{task-name}/index.json`, set that step’s `status` back to `"pending"`, remove `error_message`, then re-run.
+- **On blocked**: Resolve what `blocked_reason` describes, set `status` to `"pending"`, remove `blocked_reason`, then re-run.

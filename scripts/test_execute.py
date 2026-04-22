@@ -1,6 +1,6 @@
 """
-execute.py 리팩터링 안전망 테스트.
-리팩터링 전후 동작이 동일한지 검증한다.
+Safety-net tests for execute.py refactoring.
+Verifies behavior stays consistent across refactors.
 """
 
 import json
@@ -24,7 +24,7 @@ import execute as ex
 
 @pytest.fixture
 def tmp_project(tmp_path):
-    """phases/, CLAUDE.md, docs/ 를 갖춘 임시 프로젝트 구조."""
+    """Temporary project layout with phases/, CLAUDE.md, and docs/."""
     phases_dir = tmp_path / "phases"
     phases_dir.mkdir()
 
@@ -41,7 +41,7 @@ def tmp_project(tmp_path):
 
 @pytest.fixture
 def phase_dir(tmp_project):
-    """step 3개를 가진 phase 디렉토리."""
+    """Phase directory containing three steps."""
     d = tmp_project / "phases" / "0-mvp"
     d.mkdir()
 
@@ -49,13 +49,13 @@ def phase_dir(tmp_project):
         "project": "TestProject",
         "phase": "mvp",
         "steps": [
-            {"step": 0, "name": "setup", "status": "completed", "summary": "프로젝트 초기화 완료"},
-            {"step": 1, "name": "core", "status": "completed", "summary": "핵심 로직 구현"},
+            {"step": 0, "name": "setup", "status": "completed", "summary": "Project initialization complete"},
+            {"step": 1, "name": "core", "status": "completed", "summary": "Core logic implemented"},
             {"step": 2, "name": "ui", "status": "pending"},
         ],
     }
     (d / "index.json").write_text(json.dumps(index, indent=2, ensure_ascii=False))
-    (d / "step2.md").write_text("# Step 2: UI\n\nUI를 구현하세요.")
+    (d / "step2.md").write_text("# Step 2: UI\n\nImplement the UI.")
 
     return d
 
@@ -76,10 +76,10 @@ def top_index(tmp_project):
 
 @pytest.fixture
 def executor(tmp_project, phase_dir):
-    """테스트용 StepExecutor 인스턴스. git 호출은 별도 mock 필요."""
+    """StepExecutor for tests; mock git separately."""
     with patch.object(ex, "ROOT", tmp_project):
         inst = ex.StepExecutor("0-mvp")
-    # 내부 경로를 tmp_project 기준으로 재설정
+    # Re-point internal paths to tmp_project
     inst._root = str(tmp_project)
     inst._phases_dir = tmp_project / "phases"
     inst._phase_dir = phase_dir
@@ -90,13 +90,13 @@ def executor(tmp_project, phase_dir):
 
 
 # ---------------------------------------------------------------------------
-# _stamp (= 이전 now_iso)
+# _stamp (PST / ISO timestamp — fixed UTC-8 in StepExecutor.TZ)
 # ---------------------------------------------------------------------------
 
 class TestStamp:
-    def test_returns_kst_timestamp(self, executor):
+    def test_returns_pst_offset(self, executor):
         result = executor._stamp()
-        assert "+0900" in result
+        assert "-0800" in result
 
     def test_format_is_iso(self, executor):
         result = executor._stamp()
@@ -117,7 +117,7 @@ class TestStamp:
 
 class TestJsonHelpers:
     def test_roundtrip(self, tmp_path):
-        data = {"key": "값", "nested": [1, 2, 3]}
+        data = {"key": "café", "nested": [1, 2, 3]}
         p = tmp_path / "test.json"
         ex.StepExecutor._write_json(p, data)
         loaded = ex.StepExecutor._read_json(p)
@@ -125,9 +125,10 @@ class TestJsonHelpers:
 
     def test_save_ensures_ascii_false(self, tmp_path):
         p = tmp_path / "test.json"
-        ex.StepExecutor._write_json(p, {"한글": "테스트"})
+        ex.StepExecutor._write_json(p, {"naïve": "résumé"})
         raw = p.read_text()
-        assert "한글" in raw
+        assert "naïve" in raw
+        assert "résumé" in raw
         assert "\\u" not in raw
 
     def test_save_indented(self, tmp_path):
@@ -149,6 +150,7 @@ class TestLoadGuardrails:
     def test_loads_claude_md_and_docs(self, executor, tmp_project):
         with patch.object(ex, "ROOT", tmp_project):
             result = executor._load_guardrails()
+        assert "Project rules (CLAUDE.md)" in result
         assert "# Rules" in result
         assert "rule one" in result
         assert "# Architecture" in result
@@ -183,7 +185,7 @@ class TestLoadGuardrails:
 
     def test_empty_project(self, tmp_path):
         with patch.object(ex, "ROOT", tmp_path):
-            # executor가 필요 없는 static-like 동작이므로 임시 인스턴스
+            # Bare instance: static-like path, no full executor init
             phases_dir = tmp_path / "phases" / "dummy"
             phases_dir.mkdir(parents=True)
             idx = {"project": "T", "phase": "t", "steps": []}
@@ -201,8 +203,8 @@ class TestBuildStepContext:
     def test_includes_completed_with_summary(self, phase_dir):
         index = json.loads((phase_dir / "index.json").read_text())
         result = ex.StepExecutor._build_step_context(index)
-        assert "Step 0 (setup): 프로젝트 초기화 완료" in result
-        assert "Step 1 (core): 핵심 로직 구현" in result
+        assert "Step 0 (setup): Project initialization complete" in result
+        assert "Step 1 (core): Core logic implemented" in result
 
     def test_excludes_pending(self, phase_dir):
         index = json.loads((phase_dir / "index.json").read_text())
@@ -224,7 +226,7 @@ class TestBuildStepContext:
     def test_has_header(self, phase_dir):
         index = json.loads((phase_dir / "index.json").read_text())
         result = ex.StepExecutor._build_step_context(index)
-        assert result.startswith("## 이전 Step 산출물")
+        assert result.startswith("## Previous step outputs")
 
 
 # ---------------------------------------------------------------------------
@@ -241,9 +243,9 @@ class TestBuildPreamble:
         assert "GUARD_CONTENT" in result
 
     def test_includes_step_context(self, executor):
-        ctx = "## 이전 Step 산출물\n\n- Step 0: done"
+        ctx = "## Previous step outputs\n\n- Step 0: done"
         result = executor._build_preamble("", ctx)
-        assert "이전 Step 산출물" in result
+        assert "Previous step outputs" in result
 
     def test_includes_commit_example(self, executor):
         result = executor._build_preamble("", "")
@@ -251,17 +253,17 @@ class TestBuildPreamble:
 
     def test_includes_rules(self, executor):
         result = executor._build_preamble("", "")
-        assert "작업 규칙" in result
+        assert "Working rules" in result
         assert "AC" in result
 
     def test_no_retry_section_by_default(self, executor):
         result = executor._build_preamble("", "")
-        assert "이전 시도 실패" not in result
+        assert "Previous attempt failed" not in result
 
     def test_retry_section_with_prev_error(self, executor):
-        result = executor._build_preamble("", "", prev_error="타입 에러 발생")
-        assert "이전 시도 실패" in result
-        assert "타입 에러 발생" in result
+        result = executor._build_preamble("", "", prev_error="Type error occurred")
+        assert "Previous attempt failed" in result
+        assert "Type error occurred" in result
 
     def test_includes_max_retries(self, executor):
         result = executor._build_preamble("", "")
@@ -418,6 +420,19 @@ class TestCommitStep:
         assert len(commit_msgs) == 1
         assert "chore" in commit_msgs[0]
 
+    def test_commit_failure_exits(self, executor):
+        def fake_git(*args):
+            if args[0] == "commit":
+                return MagicMock(returncode=1, stdout="", stderr="commit rejected")
+            if args[:2] == ("diff", "--cached"):
+                return MagicMock(returncode=1)
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        executor._run_git = fake_git
+        with pytest.raises(SystemExit) as exc_info:
+            executor._commit_step(2, "ui")
+        assert exc_info.value.code == 1
+
 
 # ---------------------------------------------------------------------------
 # _invoke_claude (mocked)
@@ -438,7 +453,7 @@ class TestInvokeClaude:
         assert "--dangerously-skip-permissions" in cmd
         assert "--output-format" in cmd
         assert "PREAMBLE" in cmd[-1]
-        assert "UI를 구현하세요" in cmd[-1]
+        assert "Implement the UI" in cmd[-1]
 
     def test_saves_output_json(self, executor):
         mock_result = MagicMock(returncode=0, stdout='{"ok": true}', stderr="")
@@ -469,9 +484,28 @@ class TestInvokeClaude:
 
         assert mock_run.call_args[1]["timeout"] == 1800
 
+    def test_timeout_writes_output_and_exit_code_124(self, executor):
+        step = {"step": 2, "name": "ui"}
+        exc = subprocess.TimeoutExpired(
+            cmd=["claude"],
+            timeout=1800,
+            output='{"partial": true}',
+            stderr="stderr line",
+        )
+
+        with patch("subprocess.run", side_effect=exc):
+            out = executor._invoke_claude(step, "preamble")
+
+        assert out["exitCode"] == 124
+        assert "TimeoutExpired" in out["stderr"]
+        output_file = executor._phase_dir / "step2-output.json"
+        assert output_file.exists()
+        data = json.loads(output_file.read_text())
+        assert data["exitCode"] == 124
+
 
 # ---------------------------------------------------------------------------
-# progress_indicator (= 이전 Spinner)
+# progress_indicator
 # ---------------------------------------------------------------------------
 
 class TestProgressIndicator:
@@ -489,7 +523,7 @@ class TestProgressIndicator:
 
 
 # ---------------------------------------------------------------------------
-# main() CLI 파싱 (mocked)
+# main() CLI parsing (mocked)
 # ---------------------------------------------------------------------------
 
 class TestMainCli:
@@ -514,9 +548,19 @@ class TestMainCli:
                     ex.main()
                 assert exc_info.value.code == 1
 
+    def test_index_without_steps_exits(self, tmp_project):
+        d = tmp_project / "phases" / "bad-index"
+        d.mkdir()
+        (d / "index.json").write_text(json.dumps({"project": "P", "phase": "bad"}))
+        with patch("sys.argv", ["execute.py", "bad-index"]):
+            with patch.object(ex, "ROOT", tmp_project):
+                with pytest.raises(SystemExit) as exc_info:
+                    ex.main()
+                assert exc_info.value.code == 1
+
 
 # ---------------------------------------------------------------------------
-# _check_blockers (= 이전 main() error/blocked 체크)
+# _check_blockers (error / blocked steps)
 # ---------------------------------------------------------------------------
 
 class TestCheckBlockers:

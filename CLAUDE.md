@@ -1,21 +1,82 @@
-# 프로젝트: {프로젝트명}
+# CLAUDE.md
 
-## 기술 스택
-- {프레임워크 (예: Next.js 15)}
-- {언어 (예: TypeScript strict mode)}
-- {스타일링 (예: Tailwind CSS)}
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## 아키텍처 규칙
-- CRITICAL: {절대 지켜야 할 규칙 1 (예: 모든 API 로직은 app/api/ 라우트 핸들러에서만 처리)}
-- CRITICAL: {절대 지켜야 할 규칙 2 (예: 클라이언트 컴포넌트에서 직접 외부 API를 호출하지 말 것)}
-- {일반 규칙 (예: 컴포넌트는 components/ 폴더에, 타입은 types/ 폴더에 분리)}
+## What this repo is
 
-## 개발 프로세스
-- CRITICAL: 새 기능 구현 시 반드시 테스트를 먼저 작성하고, 테스트가 통과하는 구현을 작성할 것 (TDD)
-- 커밋 메시지는 conventional commits 형식을 따를 것 (feat:, fix:, docs:, refactor:)
+This is the **Harness framework** — a Python-based orchestration layer that drives multi-step, agentic Claude Code sessions. It is a meta-framework: you use it to automate implementation of *other* projects by breaking work into phases → steps → prompts, then running them unattended with self-correction and git integration.
 
-## 명령어
-npm run dev      # 개발 서버
-npm run build    # 프로덕션 빌드
-npm run lint     # ESLint
-npm run test     # 테스트
+## Commands
+
+```bash
+# Run a phase (executes all pending steps sequentially)
+python3 scripts/execute.py <phase-dir>
+
+# Run a phase and push the feature branch when done
+python3 scripts/execute.py <phase-dir> --push
+
+# Run tests
+pytest scripts/test_execute.py
+
+# Run a single test class
+pytest scripts/test_execute.py::TestInvokeClaude
+```
+
+## Architecture
+
+### Core concept
+
+Work is organized as: **phases** → **steps**. Each step is a markdown prompt file; `execute.py` runs it via `claude -p --dangerously-skip-permissions`, reads `index.json` to see if it completed/blocked/failed, retries up to 3× on failure, then commits and advances.
+
+### Key files
+
+- `scripts/execute.py` — the entire harness runtime (`StepExecutor` class). The only executable.
+- `scripts/test_execute.py` — pytest safety-net tests; mock git and subprocess to stay unit-level.
+- `.claude/commands/harness.md` — the `/harness` slash command: workflow guide for designing phases/steps.
+- `.claude/commands/discover.md` — the `/discover` slash command: interactive discovery before implementation.
+- `templates/discovery/0-discovery/` — copy-paste template for running discovery as a harness phase.
+
+### Phase layout (runtime, not in this repo yet)
+
+```
+phases/
+  index.json                     # top-level rollup (optional)
+  <phase-dir>/
+    index.json                   # step list + status (the control plane)
+    step0.md, step1.md, ...      # prompt files (one per step)
+    step0-output.json, ...       # Claude's raw stdout/stderr (written by harness)
+```
+
+### How `execute.py` drives a step
+
+1. Reads `phases/<phase>/index.json` for the first `"pending"` step.
+2. Builds a prompt: `CLAUDE.md` + `docs/*.md` (guardrails) + completed-step summaries + `stepN.md`.
+3. Calls `claude -p --dangerously-skip-permissions --output-format json <prompt>`.
+4. Re-reads `index.json` — success is determined solely by the agent setting `status` to `"completed"`.
+5. On non-completed: retries up to `MAX_RETRIES=3`, injecting the prior error into the prompt.
+6. Commits: `feat(<phase>): step N — <name>` for code, `chore(<phase>): step N output` for metadata.
+
+### `index.json` status machine
+
+| Status | Meaning |
+|---|---|
+| `pending` | Eligible to run |
+| `completed` | Agent set this; harness commits and advances |
+| `blocked` | Human intervention needed; harness exits 2 |
+| `error` | Failed after MAX_RETRIES; harness exits 1 |
+
+To recover: set the step's `status` back to `"pending"`, remove `error_message`/`blocked_reason`, re-run.
+
+## Development process
+
+- CRITICAL: For new features, write tests first, then implement until tests pass (TDD)
+- Commit messages follow Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`)
+- Tests mock `subprocess.run` and patch `ex.ROOT`; never hit real git or Claude in tests.
+
+## Starting a new project with this framework
+
+1. Fill in `docs/PRD.md`, `docs/ARCHITECTURE.md`, `docs/ADR.md` (currently template placeholders).
+2. If docs still have `{...}` placeholders, run discovery first:
+   - Chat-led: follow `.claude/commands/discover.md`
+   - Harness-led: `cp -R templates/discovery/0-discovery phases/0-discovery` then `python3 scripts/execute.py 0-discovery`
+3. Use `/harness` to design phases and step files, then run `execute.py`.

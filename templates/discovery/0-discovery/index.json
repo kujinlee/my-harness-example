@@ -1,0 +1,11 @@
+{
+  "project": "ReplaceWithProjectName",
+  "phase": "0-discovery",
+  "steps": [
+    { "step": 0, "name": "prd-from-brief", "status": "pending" },
+    { "step": 1, "name": "stack-arch-claude", "status": "pending" },
+    { "step": 2, "name": "adr-decisions", "status": "pending" },
+    { "step": 3, "name": "ui-guide", "status": "pending" },
+    { "step": 4, "name": "verify-docs", "status": "pending" }
+  ]
+}
