@@ -20,6 +20,9 @@ pytest scripts/test_execute.py
 
 # Run a single test class
 pytest scripts/test_execute.py::TestInvokeClaude
+
+# Run a single test method
+pytest scripts/test_execute.py::TestInvokeClaude::test_timeout_is_1800
 ```
 
 ## Architecture
@@ -51,10 +54,12 @@ phases/
 
 1. Reads `phases/<phase>/index.json` for the first `"pending"` step.
 2. Builds a prompt: `CLAUDE.md` + `docs/*.md` (guardrails) + completed-step summaries + `stepN.md`.
-3. Calls `claude -p --dangerously-skip-permissions --output-format json <prompt>`.
+3. Calls `claude -p --dangerously-skip-permissions --output-format json <prompt>` with a 1800s timeout.
 4. Re-reads `index.json` — success is determined solely by the agent setting `status` to `"completed"`.
 5. On non-completed: retries up to `MAX_RETRIES=3`, injecting the prior error into the prompt.
 6. Commits: `feat(<phase>): step N — <name>` for code, `chore(<phase>): step N output` for metadata.
+
+Branch and commit message prefix use the `"phase"` field from `index.json`, not the directory name. For example, directory `0-mvp` with `"phase": "mvp"` creates branch `feat-mvp` and commits like `feat(mvp): step 0 — setup`.
 
 ### `index.json` status machine
 
@@ -73,9 +78,15 @@ To recover: set the step's `status` back to `"pending"`, remove `error_message`/
 - Commit messages follow Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`)
 - Tests mock `subprocess.run` and patch `ex.ROOT`; never hit real git or Claude in tests.
 
+## Slash commands
+
+- `/harness` — workflow guide for designing phases and steps
+- `/discover` — interactive discovery before implementation
+- `/review` — review changed files against CLAUDE.md, ARCHITECTURE.md, and ADR
+
 ## Starting a new project with this framework
 
-1. Fill in `docs/PRD.md`, `docs/ARCHITECTURE.md`, `docs/ADR.md` (currently template placeholders).
+1. Fill in `docs/PRD.md`, `docs/ARCHITECTURE.md`, `docs/ADR.md` (currently template placeholders). These files are injected as guardrails into every step prompt, so fill them before running any phase.
 2. If docs still have `{...}` placeholders, run discovery first:
    - Chat-led: follow `.claude/commands/discover.md`
    - Harness-led: `cp -R templates/discovery/0-discovery phases/0-discovery` then `python3 scripts/execute.py 0-discovery`
