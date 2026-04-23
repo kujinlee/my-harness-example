@@ -13,7 +13,10 @@
     {
       "step": 1,
       "name": "youtube-client",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-04-23T13:40:41-0800",
+      "summary": "Created src/services/youtube.ts with parseVideoId (handles watch/youtu.be/shorts URLs) and fetchComments (YouTube Data API v3, maps to Comment[]); build passes with no TypeScript errors.",
+      "completed_at": "2026-04-23T13:41:00-0800"
     },
     {
       "step": 2,
