@@ -7,7 +7,8 @@
       "name": "project-setup",
       "status": "completed",
       "started_at": "2026-04-23T13:37:59-0800",
-      "summary": "Scaffolded Vite + React + TypeScript project with Tailwind CSS; build passes, types defined, stub App renders on dark background."
+      "summary": "Scaffolded Vite + React + TypeScript project with Tailwind CSS; build passes, types defined, stub App renders on dark background.",
+      "completed_at": "2026-04-23T13:40:41-0800"
     },
     {
       "step": 1,
