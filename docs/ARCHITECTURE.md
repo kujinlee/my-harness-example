@@ -3,22 +3,29 @@
 ## Directory structure
 ```
 src/
-├── app/               # Pages + API routes
-├── components/        # UI components
-├── types/             # TypeScript type definitions
-├── lib/               # Utilities + helpers
-└── services/          # External API wrappers
+├── components/    # React UI components (URLInput, ReportDisplay)
+├── services/      # API clients: youtube.ts, analysis.ts
+├── types/         # TypeScript interfaces (Comment, AnalysisReport)
+└── App.tsx        # Root component: owns all state, orchestrates the flow
+index.html
+vite.config.ts
+.env               # VITE_YOUTUBE_API_KEY, VITE_ANTHROPIC_API_KEY (not committed)
+.env.example       # committed template with empty values
 ```
 
 ## Patterns
-{Design patterns in use (e.g. Server Components by default; Client Components only where interaction is needed)}
+- Functional React components with hooks only. No class components.
+- All API logic lives in `src/services/`. Components never call APIs directly.
+- Single source of truth: `App.tsx` owns all state (`url`, `status`, `report`, `errorMessage`).
 
 ## Data flow
 ```
-{How data flows (e.g.
-user input → Client Component → API Route → external API → response → UI update
-)}
+User inputs YouTube URL
+  → App.tsx calls parseVideoId() to extract video ID
+  → services/youtube.ts fetches top 100 comments via YouTube Data API v3
+  → services/analysis.ts sends comments to Claude API, returns AnalysisReport JSON
+  → ReportDisplay component renders the structured report
 ```
 
 ## State management
-{How state is handled (e.g. server state via Server Components; client state via useState/useReducer)}
+Local React state in `App.tsx` only (`useState`). No Redux, Zustand, or Context needed.
