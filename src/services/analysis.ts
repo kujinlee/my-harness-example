@@ -65,7 +65,8 @@ ${comments.map(c => `[${c.likeCount} likes] ${c.text}`).join('\n')}`
 
   let report: AnalysisReport
   try {
-    report = JSON.parse(data.content[0].text) as AnalysisReport
+    const text = data.content[0].text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
+    report = JSON.parse(text) as AnalysisReport
   } catch {
     throw new Error('Failed to parse analysis response as JSON')
   }
