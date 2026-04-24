@@ -75,8 +75,10 @@ To recover: set the step's `status` back to `"pending"`, remove `error_message`/
 ## Development process
 
 - CRITICAL: For new features, write tests first, then implement until tests pass (TDD)
+- CRITICAL: Step files must include test setup in the first step of any phase, and `npm test` (or `pytest`) must be part of every step's Acceptance Criteria. Never use `npm run build` alone as the AC.
 - Commit messages follow Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`)
-- Tests mock `subprocess.run` and patch `ex.ROOT`; never hit real git or Claude in tests.
+- Harness tests mock `subprocess.run` and patch `ex.ROOT`; never hit real git or Claude in tests.
+- Frontend tests use Vitest with `environment: 'node'` for service/logic tests; mock `fetch` with `vi.spyOn(globalThis, 'fetch')`.
 
 ## Slash commands
 
